@@ -10,8 +10,7 @@ using Terraria.ID;
 using ServerPortals.Tiles;
 using System;
 using System.Threading;
-using System.Net.NetworkInformation;
-using System.Text;
+using System.Net.Sockets;
 using Ionic.Zlib;
 using System.Reflection;
 using System.Windows.Input;
@@ -102,37 +101,31 @@ namespace ServerPortals
 
         private void ConnectToServerIP(object threadContext)
         {
-            Ping pingSender = new Ping();
-            PingOptions options = new PingOptions();
-            options.DontFragment = true;
-
-            string data = "a";
-            byte[] buffer = Encoding.ASCII.GetBytes(data);
-            int timeout = 1000;
-
-            PingReply reply = null;
             try
             {
-                reply = pingSender.Send(Netplay.ServerIP, timeout, buffer, options);
+                using (TcpClient client = new TcpClient())
+                {
+                    var connectTask = client.ConnectAsync(Netplay.ServerIP, Netplay.ListenPort);
+                    if (!connectTask.Wait(1000) || !client.Connected)
+                    {
+                        Main.NewText("Could not reach destination server!");
+                        ServerPortalTileEntity.ServerSelectLock = false;
+                        return;
+                    }
+                }
             }
             catch
             {
-                Main.NewText("Could not ping destination server!");
+                Main.NewText("Could not reach destination server!");
+                ServerPortalTileEntity.ServerSelectLock = false;
                 return;
             }
 
-            if (reply.Status == IPStatus.Success)
+            WorldGen.SaveAndQuit(() =>
             {
-                WorldGen.SaveAndQuit(() =>
-                {
-                    Main.menuMode = 10;
-                    Netplay.StartTcpClient();
-                });
-            }
-            else
-            {
-                Main.NewText("Ping to server timed out!");
-            }
+                Main.menuMode = 10;
+                Netplay.StartTcpClient();
+            });
 
             ServerPortalTileEntity.ServerSelectLock = false;
         }
